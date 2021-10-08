@@ -1,0 +1,10 @@
+*.json
+*.exe
+dotdotbot
+*.a
+*.s
+*.o
+*.png
+temp/
+keys/
+*.db
