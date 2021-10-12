@@ -1,6 +1,7 @@
 *.json
 *.exe
-dotdotbot
+dotdotbot.exe
+!contracts/dotdotbot
 *.a
 *.s
 *.o
