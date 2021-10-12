@@ -1,5 +1,9 @@
 pragma solidity ^0.8.7;
 
+/**
+@dev this is a stripped down version of the ERC721 token standard containing only the methods 
+we need to call on the contract code to keep things a minimal as possible
+ */
 interface ERC721Stripped {
     function setApprovalForAll(address op, bool approved) external;
 
@@ -38,6 +42,7 @@ contract dotdotbot is ERC721TokenReceiver {
     mapping(address => bool) private whitelisted;
 
     uint256 public constant PRICE = 50000000000000000; // 0.05 eth
+    uint256 public constant DOUBLE_PRICE = PRICE * 2; // 0.1 eth. This is the minimum balance we want to have in the contract for any potential gas fees that may incur
 
     constructor() {
         _owner = msg.sender;
@@ -50,10 +55,7 @@ contract dotdotbot is ERC721TokenReceiver {
         uint256 _tokenId,
         bytes calldata _data
     ) external override returns (bytes4) {
-        return
-            bytes4(
-                keccak256("onERC721Received(address,address,uint256,bytes)")
-            );
+        return dotdotbot.onERC721Received.selector;
     }
 
     modifier onlyOwner() {
@@ -85,7 +87,6 @@ contract dotdotbot is ERC721TokenReceiver {
         return _owner;
     }
 
-    // be able to
     function deposit() public payable onlyWhitelist {}
 
     function withdraw() public onlyOwner {
@@ -93,25 +94,26 @@ contract dotdotbot is ERC721TokenReceiver {
     }
 
     function tryMint(uint256 count) public onlyWhitelist {
-        dotdotdot(_dotdotdotContract).mint{value: PRICE * count}(count);
+        if (address(this).balance >= DOUBLE_PRICE) {
+            dotdotdot(_dotdotdotContract).mint{value: PRICE * count}(count);
+        }
     }
 
     function transferToOwner() public onlyOwner {
-        ERC721Stripped(_dotdotdotContract).setApprovalForAll(_owner, true);
+        ERC721Stripped dot = ERC721Stripped(_dotdotdotContract);
 
-        uint256 balance = ERC721Stripped(_dotdotdotContract).balanceOf(
-            address(this)
-        );
+        dot.setApprovalForAll(_owner, true);
+
+        uint256 balance = dot.balanceOf(address(this));
         uint256[] memory owned = new uint256[](balance);
 
         for (uint256 i = 0; i < balance; i++) {
-            uint256 token = ERC721Stripped(_dotdotdotContract)
-                .tokenOfOwnerByIndex(address(this), i);
-                owned[i] = token;
+            uint256 token = dot.tokenOfOwnerByIndex(address(this), i);
+            owned[i] = token;
         }
 
-        for (uint256 i =0; i < owned.length; i++) {
-            ERC721Stripped(_dotdotdotContract).safeTransferFrom(address(this), _owner, owned[i]);
+        for (uint256 i = 0; i < owned.length; i++) {
+            dot.safeTransferFrom(address(this), _owner, owned[i]);
         }
 
         delete owned;
