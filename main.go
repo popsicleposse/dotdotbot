@@ -93,6 +93,13 @@ func main() {
 		// Could not create the contract, oh well
 		log.Fatalln(err)
 	}
+
+	abi, err := dotdotbot.DotdotbotMetaData.GetAbi()
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	// literally just want to run it as long as we can
 	for {
 		// check if the sale is
@@ -104,6 +111,7 @@ func main() {
 		} else if activeSale {
 
 			keyStore.Unlock(keyStore.Accounts()[0], conf.KeystoreConf.Password)
+
 			// try to mint. The node will need to have a private key (wallet) associated with it! this can be set up through an encrypted keystore
 			// or an account attached through `geth account`
 			// See: https://geth.ethereum.org/docs/interface/managing-your-accounts
@@ -112,7 +120,10 @@ func main() {
 				Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
 					return keyStore.SignTx(keyStore.Accounts()[0], tx, tx.ChainId())
 				},
+				NoSend: true,
 			}, big.NewInt(int64(conf.MintCount)))
+
+			transaction.Data()
 
 			if err != nil {
 				log.Println("failed transaction:", err)
