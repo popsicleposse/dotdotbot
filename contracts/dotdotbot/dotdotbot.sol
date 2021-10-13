@@ -41,8 +41,8 @@ contract dotdotbot is ERC721TokenReceiver {
     address private _owner;
     mapping(address => bool) private whitelisted;
 
-    uint256 public constant PRICE = 50000000000000000; // 0.05 eth
-    uint256 public constant DOUBLE_PRICE = PRICE * 2; // 0.1 eth. This is the minimum balance we want to have in the contract for any potential gas fees that may incur
+    uint256 private PRICE = 0.05 ether; // 0.05 eth
+    uint256 private DOUBLE_PRICE = PRICE * 2; // 0.1 eth. This is the minimum balance we want to have in the contract for any potential gas fees that may incur
 
     constructor() {
         _owner = msg.sender;
@@ -73,6 +73,14 @@ contract dotdotbot is ERC721TokenReceiver {
         );
         _;
     }
+
+
+    // sets the price (in wei)
+    function setPrice(uint256 price) external onlyOwner {
+        PRICE = price; // in wei
+        DOUBLE_PRICE = price * 2;
+    }
+
 
     function setWhitelisted(address addr, bool status) public onlyOwner {
         whitelisted[addr] = status;
