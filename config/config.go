@@ -10,7 +10,10 @@ import (
 type Config struct {
 	Host         string   `json:"host"`
 	KeystoreConf KeyStore `json:"keystore"`
+	MintContract string   `json:"mintContract"`
+	BotContract  string   `json:"botContract"`
 	MintCount    uint     `json:"mintCount"`
+	MaxMintCount uint     `json:"maxMintCount"`
 }
 
 type KeyStore struct {

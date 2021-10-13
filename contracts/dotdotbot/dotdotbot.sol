@@ -41,8 +41,8 @@ contract dotdotbot is ERC721TokenReceiver {
     address private _owner;
     mapping(address => bool) private whitelisted;
 
-    uint256 private PRICE = 0.05 ether; // 0.05 eth
-    uint256 private DOUBLE_PRICE = PRICE * 2; // 0.1 eth. This is the minimum balance we want to have in the contract for any potential gas fees that may incur
+    uint256 private PRICE; // this is the base price of the mint
+    uint256 private DOUBLE_PRICE; // This is the minimum balance we want to have in the contract for any potential gas fees that may incur
 
     constructor() {
         _owner = msg.sender;

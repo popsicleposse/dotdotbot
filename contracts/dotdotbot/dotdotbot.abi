@@ -1,0 +1,156 @@
+[
+   {
+      "inputs":[
+         
+      ],
+      "name":"deposit",
+      "outputs":[
+         
+      ],
+      "stateMutability":"payable",
+      "type":"function"
+   },
+   {
+      "inputs":[
+         {
+            "internalType":"address",
+            "name":"_operator",
+            "type":"address"
+         },
+         {
+            "internalType":"address",
+            "name":"_from",
+            "type":"address"
+         },
+         {
+            "internalType":"uint256",
+            "name":"_tokenId",
+            "type":"uint256"
+         },
+         {
+            "internalType":"bytes",
+            "name":"_data",
+            "type":"bytes"
+         }
+      ],
+      "name":"onERC721Received",
+      "outputs":[
+         {
+            "internalType":"bytes4",
+            "name":"",
+            "type":"bytes4"
+         }
+      ],
+      "stateMutability":"nonpayable",
+      "type":"function"
+   },
+   {
+      "inputs":[
+         {
+            "internalType":"address",
+            "name":"addr",
+            "type":"address"
+         }
+      ],
+      "name":"setImplementation",
+      "outputs":[
+         
+      ],
+      "stateMutability":"nonpayable",
+      "type":"function"
+   },
+   {
+      "inputs":[
+         {
+            "internalType":"uint256",
+            "name":"price",
+            "type":"uint256"
+         }
+      ],
+      "name":"setPrice",
+      "outputs":[
+         
+      ],
+      "stateMutability":"nonpayable",
+      "type":"function"
+   },
+   {
+      "inputs":[
+         {
+            "internalType":"address",
+            "name":"addr",
+            "type":"address"
+         },
+         {
+            "internalType":"bool",
+            "name":"status",
+            "type":"bool"
+         }
+      ],
+      "name":"setWhitelisted",
+      "outputs":[
+         
+      ],
+      "stateMutability":"nonpayable",
+      "type":"function"
+   },
+   {
+      "inputs":[
+         
+      ],
+      "name":"transferToOwner",
+      "outputs":[
+         
+      ],
+      "stateMutability":"nonpayable",
+      "type":"function"
+   },
+   {
+      "inputs":[
+         {
+            "internalType":"uint256",
+            "name":"count",
+            "type":"uint256"
+         }
+      ],
+      "name":"tryMint",
+      "outputs":[
+         
+      ],
+      "stateMutability":"nonpayable",
+      "type":"function"
+   },
+   {
+      "inputs":[
+         
+      ],
+      "name":"withdraw",
+      "outputs":[
+         
+      ],
+      "stateMutability":"nonpayable",
+      "type":"function"
+   },
+   {
+      "inputs":[
+         
+      ],
+      "stateMutability":"nonpayable",
+      "type":"constructor"
+   },
+   {
+      "inputs":[
+         
+      ],
+      "name":"owner",
+      "outputs":[
+         {
+            "internalType":"address",
+            "name":"",
+            "type":"address"
+         }
+      ],
+      "stateMutability":"view",
+      "type":"function"
+   }
+]

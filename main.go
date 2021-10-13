@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"math/big"
 	"os"
@@ -14,14 +13,11 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/popsicleposse/dotdotbot/config"
-	"github.com/popsicleposse/dotdotbot/contracts/dotdotdots"
+	"github.com/popsicleposse/dotdotbot/contracts/dotdotbot"
+	"github.com/popsicleposse/dotdotbot/contracts/kaiju"
 )
 
-//the address of the dotdotdot contract
-const (
-	DotdotdotAddress = "0x906600D7737357cB2ad4C1c2E77928F4B4165513"
-	Price            = 0.05 // cost is 0.05 ETH
-)
+const ()
 
 var (
 	configPath = flag.String("config", "config.json", "defines the path to the config")
@@ -46,7 +42,7 @@ func init() {
 	}
 
 	conf = c // set the config to the one read
-	store := keystore.NewKeyStore("./temp", keystore.StandardScryptN, keystore.StandardScryptP)
+	store := keystore.NewKeyStore(c.KeystoreConf.Path, keystore.StandardScryptN, keystore.StandardScryptP)
 
 	if store == nil {
 		log.Fatalln("store is nil")
@@ -71,10 +67,6 @@ func ethToWei(eth float64) *big.Int {
 }
 
 func main() {
-	// todo use GORM to store transactions
-
-	fmt.Println(ethToWei(0.05))
-
 	// attempt to create a new ethereum client using the host we have
 	client, err := ethclient.Dial(conf.Host)
 
@@ -84,19 +76,27 @@ func main() {
 	}
 
 	var (
-		contractAddress = common.HexToAddress(DotdotdotAddress)
+		mintContractAddress = common.HexToAddress(conf.MintContract)
+		botContractAddress  = common.HexToAddress(conf.BotContract)
 	)
 
-	contract, err := dotdotdots.NewDotdotdots(contractAddress, client)
+	mintContract, err := kaiju.NewKaiju(mintContractAddress, client)
 
 	if err != nil {
 		// Could not create the contract, oh well
 		log.Fatalln(err)
 	}
 
+	botContract, err := dotdotbot.NewDotdotbot(botContractAddress, client)
+
+	if err != nil {
+		// Could not create the contract, oh well
+		log.Fatalln(err)
+	}
 	// literally just want to run it as long as we can
 	for {
-		activeSale, err := contract.SaleIsActive(&bind.CallOpts{})
+		// check if the sale is
+		activeSale, err := mintContract.SaleActive(&bind.CallOpts{})
 
 		if err != nil {
 			// print the error
@@ -107,11 +107,10 @@ func main() {
 			// try to mint. The node will need to have a private key (wallet) associated with it! this can be set up through an encrypted keystore
 			// or an account attached through `geth account`
 			// See: https://geth.ethereum.org/docs/interface/managing-your-accounts
-			transaction, err := contract.Mint(&bind.TransactOpts{
-				From:  keyStore.Accounts()[0].Address,
-				Value: ethToWei(float64(conf.MintCount) * 0.05),
+			transaction, err := botContract.TryMint(&bind.TransactOpts{
+				From: keyStore.Accounts()[0].Address,
 				Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
-					return keyStore.SignTx(keyStore.Accounts()[0], tx, big.NewInt(5))
+					return keyStore.SignTx(keyStore.Accounts()[0], tx, tx.ChainId())
 				},
 			}, big.NewInt(int64(conf.MintCount)))
 
