@@ -1,6 +1,8 @@
 *.json
 *.exe
 dotdotbot.exe
+dotdotbot
+accounts/
 !contracts/dotdotbot
 *.a
 *.s

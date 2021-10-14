@@ -8,12 +8,24 @@ import (
 
 // lol, small config
 type Config struct {
-	Host         string   `json:"host"`
-	KeystoreConf KeyStore `json:"keystore"`
-	MintContract string   `json:"mintContract"`
-	BotContract  string   `json:"botContract"`
-	MintCount    uint     `json:"mintCount"`
-	MaxMintCount uint     `json:"maxMintCount"`
+	Host         string      `json:"host"`
+	KeystoreConf KeyStore    `json:"keystore"`
+	MintContract string      `json:"mintContract"`
+	BotContract  string      `json:"botContract"`
+	Mint         MintDetails `json:"mint"`
+	// Do we try to mint on chain with our own deployed contract?
+	MintWithContract bool `json:"mintWithContract"`
+}
+
+type MintDetails struct {
+	// We will multiply the gas to use by this much to attempt to ensure a mint.
+	GasMultiplier uint64 `json:"gasMultiplier"`
+	// The price of the mint in question, only used when not minting with contract - the price gets set on the contract
+	Price float64 `json:"price"`
+	// The number we should try to mint in the transaction
+	MintCount uint64 `json:"mintCount"`
+	// The number we should attempt to mint in total
+	MaxMintCount uint64 `json:"maxMintCount"`
 }
 
 type KeyStore struct {
