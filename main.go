@@ -187,6 +187,9 @@ func main() {
 			}
 
 			keyStore.Lock(keyStore.Accounts()[0].Address)
+		} else {
+			log.Println("sale not active.")
+			time.Sleep(50 * time.Millisecond)
 		}
 
 		if retries == 0 {
