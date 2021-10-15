@@ -5,8 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"math/big"
 	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -75,7 +77,8 @@ func init() {
 	}
 
 	// create the migration for the database
-	db.AutoMigrate(&model.StoredTxn{})
+	db.AutoMigrate(&model.QueuedTxn{})
+	db.AutoMigrate(&model.FinalTxn{})
 
 	database = db
 }
@@ -116,6 +119,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	name, err := mintContract.Name(nil)
 	// contractAbi, err := dotdotdots.DotdotdotsMetaData.GetAbi()
 
 	if err != nil {
@@ -123,7 +127,7 @@ func main() {
 	}
 
 	// literally just want to run it as long as we can
-	for uint64(successfulMints) < conf.Mint.MaxMintCount {
+	for {
 
 		selectedAccount := keyStore.Accounts()[0]
 
@@ -136,8 +140,8 @@ func main() {
 			// print the error
 			log.Println(err)
 		} else if activeSale {
-			var pendingTxns []model.StoredTxn
-			database.Where(&model.StoredTxn{Pending: true}).Find(&pendingTxns)
+			var pendingTxns []model.QueuedTxn
+			database.Where(&model.QueuedTxn{Pending: true}).Find(&pendingTxns)
 
 			for _, txn := range pendingTxns {
 				tx, pending, err := client.TransactionByHash(context.Background(), common.HexToHash(txn.Hash))
@@ -164,13 +168,14 @@ func main() {
 							},
 							GasLimit: gasEstimate * conf.Mint.GasMultiplier,
 							Nonce:    big.NewInt(int64(txn.Nonce)),
-						}, big.NewInt(int64(conf.Mint.MintCount)))
+						}, big.NewInt(int64(txn.Amount)))
 
 						if err != nil {
 							log.Println(err)
 						} else {
 
-							database.Table("stored_txns").Where("hash = ?", txn.Hash).Update("pending", false)
+							// transaction no longer pending, update it.
+							database.Model(&model.QueuedTxn{}).Delete("hash = ?", txn.Hash)
 
 							fmt.Println("successfully replayed the transaction", tx)
 						}
@@ -179,61 +184,110 @@ func main() {
 
 				} else {
 					// transaction no longer pending, update it.
-					database.Table("stored_txns").Where("hash = ?", txn.Hash).Update("pending", false)
+					database.Model(&model.QueuedTxn{}).Delete("hash = ?", txn.Hash)
 				}
 			}
+
+			for _, txn := range pendingTxns {
+				txnHash := common.HexToHash(txn.Hash)
+				receipt, err := client.TransactionReceipt(context.Background(), txnHash)
+
+				for err != nil {
+					time.Sleep(500 * time.Millisecond)
+
+					log.Println("no receipt yet. retrying.")
+					receipt, err = client.TransactionReceipt(context.Background(), txnHash)
+				}
+
+				txn, pending, err := client.TransactionByHash(context.Background(), txnHash)
+
+				for err != nil || pending {
+					time.Sleep(500 * time.Millisecond)
+					log.Println("no log yet. retrying.")
+					txn, pending, err = client.TransactionByHash(context.Background(), txnHash)
+
+				}
+
+				database.Create(
+					&model.FinalTxn{
+						ProjectName: name,
+						Status:      uint(receipt.Status),
+						Hash:        txnHash.String(),
+						Value:       txn.Value().String(),
+						Gas:         txn.Gas(),
+						GasPrice:    txn.GasPrice().String(),
+						Cost:        txn.Cost().String(),
+					})
+			}
+
+			break
+
 		} else {
 			// if the sale is not active we want to place a transaction that will remain in pending util we update it.
 
-			// grab the latest nonce we should be using...this is the number of pending transactions or simply the next
-			// nonce (final transaction count + 1)
-			nonce, err := client.PendingNonceAt(context.Background(), selectedAccount.Address)
-			if err != nil {
-				log.Println(err)
-			} else {
+			target := conf.Mint.MintTarget
+			perTransaction := conf.Mint.MintPerTransaction
 
-				// calculate the value
-				value := ethToWei(conf.Mint.Price * float64(conf.Mint.MintCount))
+			transactionCount := int(math.Ceil(float64(target) / float64(perTransaction)))
 
-				transaction, err := mintContract.Mint(&bind.TransactOpts{
-					Value:    value,
-					GasPrice: big.NewInt(8), // set to a low gas price
-					GasLimit: 530000,        // set to a minimum
-					Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
-						return keyStore.SignTx(selectedAccount, tx, chainId)
-					},
-					// NoSend: true,
-					Nonce: big.NewInt(int64(nonce)),
-				}, big.NewInt(int64(conf.Mint.MintCount)))
+			var queuedTxns []model.QueuedTxn
 
-				if err != nil {
-					log.Println(err)
-				} else {
+			database.Where(&model.QueuedTxn{}).Find(&queuedTxns)
 
-					fmt.Println(transaction.Hash())
-					dbtx := &model.StoredTxn{
-						Hash:    transaction.Hash().String(),
-						Pending: true,
-						Status:  0,
-						Data:    hexutil.Encode(transaction.Data()),
-						// Value:   transaction.Value(),
-						Nonce: transaction.Nonce(),
+			if len(queuedTxns) < int(transactionCount) {
+				log.Println("queueing", transactionCount, "transactions")
+
+				totalQueued := 0
+				for i := 0; i < transactionCount; i++ {
+
+					mintCount := int(math.Min(float64((perTransaction)), float64(target-uint64(totalQueued))))
+					// grab the latest nonce we should be using...this is the number of pending transactions or simply the next
+					// nonce (final transaction count + 1)
+					nonce, err := client.PendingNonceAt(context.Background(), selectedAccount.Address)
+					if err != nil {
+						log.Println(err)
+					} else {
+						// calculate the value
+						value := ethToWei(conf.Mint.Price * float64(mintCount))
+
+						transaction, err := mintContract.Mint(&bind.TransactOpts{
+							Value:    value,
+							GasPrice: big.NewInt(8), // set to a low gas price
+							GasLimit: 530000,        // set to a minimum
+							Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
+								return keyStore.SignTx(selectedAccount, tx, chainId)
+							},
+							// NoSend: true,
+							Nonce: big.NewInt(int64(nonce)),
+						}, big.NewInt(int64(mintCount)))
+
+						if err != nil {
+							log.Println(err)
+						} else {
+							dbtx := &model.QueuedTxn{
+								ProjectName: name,
+								Hash:        transaction.Hash().String(),
+								Pending:     true,
+								Status:      0,
+								Data:        hexutil.Encode(transaction.Data()),
+								Value:       transaction.Value().String(),
+								Amount:      uint64(mintCount),
+								Nonce:       transaction.Nonce(),
+							}
+
+							totalQueued += mintCount
+
+							database.Create(dbtx)
+						}
+
 					}
-
-					database.Create(dbtx)
 				}
 
+				log.Println("successfully queued", transactionCount, "transactions...awaiting mint.")
+			} else {
+				log.Println(len(queuedTxns), "in queue...awaiting sale.")
+				time.Sleep(500 * time.Millisecond)
 			}
-
-			// transaction, err := mintContract.Mint(&bind.TransactOpts{
-			// 	From: selectedAccount.Address,
-			// 	Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
-			// 		return keyStore.SignTx(selectedAccount, tx, big.NewInt(5))
-			// 	},
-			// 	Value: ethToWei(conf.Mint.Price * float64(conf.Mint.MintCount)),
-
-			// 	GasPrice: big.NewInt(8),
-			// }, big.NewInt(int64(conf.Mint.MintCount)))
 
 		}
 

@@ -23,10 +23,10 @@ type MintDetails struct {
 	GasMultiplier uint64 `json:"gasMultiplier"`
 	// The price of the mint in question, only used when not minting with contract - the price gets set on the contract
 	Price float64 `json:"price"`
-	// The number we should try to mint in the transaction
-	MintCount uint64 `json:"mintCount"`
 	// The number we should attempt to mint in total
-	MaxMintCount uint64 `json:"maxMintCount"`
+	MintTarget uint64 `json:"mintTarget"`
+	// the number of mints in a transaction
+	MintPerTransaction uint64 `json:"mintPerTransaction"`
 }
 
 type KeyStore struct {
