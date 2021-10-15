@@ -13,6 +13,7 @@ type Config struct {
 	MintContract string      `json:"mintContract"`
 	BotContract  string      `json:"botContract"`
 	Mint         MintDetails `json:"mint"`
+	DBPath       string      `json:"dbPath"`
 	// Do we try to mint on chain with our own deployed contract?
 	MintWithContract bool `json:"mintWithContract"`
 }
