@@ -3,6 +3,7 @@
 dotdotbot.exe
 dotdotbot
 accounts/
+wallet/
 !contracts/dotdotbot
 *.a
 *.s

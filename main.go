@@ -16,7 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/popsicleposse/dotdotbot/config"
-	"github.com/popsicleposse/dotdotbot/contracts/junglefreaks"
+	"github.com/popsicleposse/dotdotbot/contracts/dotdotdots"
 )
 
 const ()
@@ -85,7 +85,7 @@ func main() {
 		retries         = 1
 	)
 
-	mintContract, err := junglefreaks.NewJunglefreaks(mintContractAddress, client)
+	mintContract, err := dotdotdots.NewDotdotdots(mintContractAddress, client)
 
 	if err != nil {
 		// Could not create the contract, oh well
@@ -108,7 +108,7 @@ func main() {
 	// literally just want to run it as long as we can
 	for uint64(successfulMints) < conf.Mint.MaxMintCount {
 		// check if the sale is
-		activeSale, err := mintContract.SaleOpen(&bind.CallOpts{})
+		activeSale, err := mintContract.SaleIsActive(&bind.CallOpts{})
 
 		if err != nil {
 			// print the error
@@ -157,6 +157,7 @@ func main() {
 							},
 							Value:    ethToWei(conf.Mint.Price * float64(conf.Mint.MintCount)),
 							GasLimit: gas * conf.Mint.GasMultiplier,
+							GasPrice: big.NewInt(8),
 						}, big.NewInt(int64(conf.Mint.MintCount)))
 
 						if err != nil {
@@ -164,6 +165,19 @@ func main() {
 						} else {
 
 							log.Printf("submitted transaction %s, gas used: %d, cost: %s. awaiting receipt\n", transaction.Hash().String(), transaction.Gas(), transaction.Cost().String())
+
+							time.Sleep(5 * time.Second)
+							log.Printf("resending the transaction with new gas...")
+
+							_, pending, _ := client.TransactionByHash(context.Background(), transaction.Hash())
+
+							if pending {
+								price, _ := client.SuggestGasPrice(context.Background())
+
+								transaction.GasPrice().Add(price, big.NewInt(0))
+
+								log.Println(client.SendTransaction(context.Background(), transaction))
+							}
 
 							receipt, err := client.TransactionReceipt(context.Background(), transaction.Hash())
 
