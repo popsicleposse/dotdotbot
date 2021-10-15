@@ -23,7 +23,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/popsicleposse/dotdotbot/config"
-	"github.com/popsicleposse/dotdotbot/contracts/dotdotdots"
+	"github.com/popsicleposse/dotdotbot/contracts/junglefreaks"
 	"github.com/popsicleposse/dotdotbot/model"
 )
 
@@ -112,7 +112,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	mintContract, err := dotdotdots.NewDotdotdots(mintContractAddress, client)
+	mintContract, err := junglefreaks.NewJunglefreaks(mintContractAddress, client)
 
 	if err != nil {
 		// Could not create the contract, oh well
@@ -134,7 +134,7 @@ func main() {
 		// prepare the account to send a transaction
 		keyStore.Unlock(selectedAccount, conf.KeystoreConf.Password)
 		// check if the sale is
-		activeSale, err := mintContract.SaleIsActive(&bind.CallOpts{})
+		activeSale, err := mintContract.SaleOpen(&bind.CallOpts{})
 
 		if err != nil {
 			// print the error
@@ -206,7 +206,6 @@ func main() {
 					time.Sleep(500 * time.Millisecond)
 					log.Println("no log yet. retrying.")
 					txn, pending, err = client.TransactionByHash(context.Background(), txnHash)
-
 				}
 
 				database.Create(
