@@ -143,6 +143,7 @@ func main() {
 			var pendingTxns []model.QueuedTxn
 			database.Where(&model.QueuedTxn{Pending: true}).Find(&pendingTxns)
 
+			var newTxns []common.Hash
 			for _, txn := range pendingTxns {
 				tx, pending, err := client.TransactionByHash(context.Background(), common.HexToHash(txn.Hash))
 
@@ -174,22 +175,22 @@ func main() {
 							log.Println(err)
 						} else {
 
+							newTxns = append(newTxns, tx.Hash())
 							// transaction no longer pending, update it.
-							database.Model(&model.QueuedTxn{}).Delete("hash = ?", txn.Hash)
+							database.Where("hash = ?", txn.Hash).Delete(&txn)
 
-							fmt.Println("successfully replayed the transaction", tx)
+							fmt.Println("successfully replayed the transaction, new txn hash:", tx.Hash().String())
 						}
 
 					}
 
 				} else {
 					// transaction no longer pending, update it.
-					database.Model(&model.QueuedTxn{}).Delete("hash = ?", txn.Hash)
+					database.Where("hash = ?", txn.Hash).Delete(&txn)
 				}
 			}
 
-			for _, txn := range pendingTxns {
-				txnHash := common.HexToHash(txn.Hash)
+			for _, txnHash := range newTxns {
 				receipt, err := client.TransactionReceipt(context.Background(), txnHash)
 
 				for err != nil {
@@ -212,7 +213,7 @@ func main() {
 					&model.FinalTxn{
 						ProjectName: name,
 						Status:      uint(receipt.Status),
-						Hash:        txnHash.String(),
+						Hash:        txnHash.String()[2:],
 						Value:       txn.Value().String(),
 						Gas:         txn.Gas(),
 						GasPrice:    txn.GasPrice().String(),
@@ -266,7 +267,7 @@ func main() {
 						} else {
 							dbtx := &model.QueuedTxn{
 								ProjectName: name,
-								Hash:        transaction.Hash().String(),
+								Hash:        transaction.Hash().String()[2:],
 								Pending:     true,
 								Status:      0,
 								Data:        hexutil.Encode(transaction.Data()),
