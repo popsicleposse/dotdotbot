@@ -74,21 +74,16 @@ contract dotdotbot is ERC721TokenReceiver {
         _;
     }
 
-
-    // sets the price (in wei)
-    function setPrice(uint256 price) external onlyOwner {
-        PRICE = price; // in wei
-        DOUBLE_PRICE = price * 2;
+    function setParameters(
+        address implementationAddress,
+        uint256 nftPrice) external onlyOwner {
+        PRICE = nftPrice; // in wei
+        DOUBLE_PRICE = nftPrice * 2; // the minimal reserves required for the mint
+        _dotdotdotContract = implementationAddress;
     }
-
 
     function setWhitelisted(address addr, bool status) public onlyOwner {
         whitelisted[addr] = status;
-    }
-
-    // sets the implementation of the dotdotdot interface
-    function setImplementation(address addr) public onlyOwner {
-        _dotdotdotContract = addr;
     }
 
     function owner() external view returns (address) {
@@ -102,7 +97,7 @@ contract dotdotbot is ERC721TokenReceiver {
     }
 
     function tryMint(uint256 count) public onlyWhitelist {
-        if (address(this).balance >= DOUBLE_PRICE) {
+        if (address(this).balance >= DOUBLE_PRICE  * count) {
             dotdotdot(_dotdotdotContract).mint{value: PRICE * count}(count);
         }
     }
@@ -111,19 +106,11 @@ contract dotdotbot is ERC721TokenReceiver {
         ERC721Stripped dot = ERC721Stripped(_dotdotdotContract);
 
         dot.setApprovalForAll(_owner, true);
-
         uint256 balance = dot.balanceOf(address(this));
-        uint256[] memory owned = new uint256[](balance);
 
         for (uint256 i = 0; i < balance; i++) {
-            uint256 token = dot.tokenOfOwnerByIndex(address(this), i);
-            owned[i] = token;
+            uint256 token = dot.tokenOfOwnerByIndex(address(this), 0);
+            dot.safeTransferFrom(address(this), _owner, token);
         }
-
-        for (uint256 i = 0; i < owned.length; i++) {
-            dot.safeTransferFrom(address(this), _owner, owned[i]);
-        }
-
-        delete owned;
     }
 }
