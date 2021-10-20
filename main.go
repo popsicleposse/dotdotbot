@@ -23,7 +23,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/popsicleposse/dotdotbot/config"
-	"github.com/popsicleposse/dotdotbot/contracts/junglefreaks"
+	"github.com/popsicleposse/dotdotbot/contracts/dotdotdots"
 	"github.com/popsicleposse/dotdotbot/model"
 )
 
@@ -100,9 +100,7 @@ func main() {
 
 	var (
 		mintContractAddress = common.HexToAddress(conf.MintContract)
-		// botContractAddress  = common.HexToAddress(conf.BotContract)
-
-		successfulMints = 0
+		successfulMints     = 0
 		// retries         = 1
 	)
 
@@ -112,7 +110,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	mintContract, err := junglefreaks.NewJunglefreaks(mintContractAddress, client)
+	mintContract, err := dotdotdots.NewDotdotdots(mintContractAddress, client)
 
 	if err != nil {
 		// Could not create the contract, oh well
@@ -120,7 +118,12 @@ func main() {
 	}
 
 	name, err := mintContract.Name(nil)
-	// contractAbi, err := dotdotdots.DotdotdotsMetaData.GetAbi()
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	contractAbi, err := dotdotdots.DotdotdotsMetaData.GetAbi()
 
 	if err != nil {
 		log.Fatalln(err)
@@ -134,60 +137,108 @@ func main() {
 		// prepare the account to send a transaction
 		keyStore.Unlock(selectedAccount, conf.KeystoreConf.Password)
 		// check if the sale is
-		activeSale, err := mintContract.SaleOpen(&bind.CallOpts{})
+		activeSale, err := mintContract.SaleIsActive(&bind.CallOpts{})
+
+		totalSupply, _ := mintContract.TotalSupply(&bind.CallOpts{})
 
 		if err != nil {
 			// print the error
 			log.Println(err)
 		} else if activeSale {
 			var pendingTxns []model.QueuedTxn
+			var newTxns []common.Hash
+
 			database.Where(&model.QueuedTxn{Pending: true}).Find(&pendingTxns)
 
-			var newTxns []common.Hash
-			for _, txn := range pendingTxns {
-				tx, pending, err := client.TransactionByHash(context.Background(), common.HexToHash(txn.Hash))
+			if len(pendingTxns) > 0 {
 
-				if err != nil {
-					log.Println(err)
-				} else if pending {
-
-					msg := ethereum.CallMsg{
-						From:  selectedAccount.Address,
-						To:    &mintContractAddress,
-						Value: tx.Value(),
-						Data:  tx.Data(),
-					}
-					gasEstimate, err := client.EstimateGas(context.Background(), msg)
+				for _, txn := range pendingTxns {
+					tx, pending, err := client.TransactionByHash(context.Background(), common.HexToHash(txn.Hash))
 
 					if err != nil {
 						log.Println(err)
-					} else {
-						tx, err := mintContract.Mint(&bind.TransactOpts{
+					} else if pending {
+
+						msg := ethereum.CallMsg{
+							From:  selectedAccount.Address,
+							To:    &mintContractAddress,
 							Value: tx.Value(),
-							Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
-								return keyStore.SignTx(selectedAccount, tx, chainId)
-							},
-							GasLimit: gasEstimate * conf.Mint.GasMultiplier,
-							Nonce:    big.NewInt(int64(txn.Nonce)),
-						}, big.NewInt(int64(txn.Amount)))
+							Data:  tx.Data(),
+						}
+						gasEstimate, err := client.EstimateGas(context.Background(), msg)
 
 						if err != nil {
 							log.Println(err)
 						} else {
+							tx, err := mintContract.Mint(&bind.TransactOpts{
+								Value: tx.Value(),
+								Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
+									return keyStore.SignTx(selectedAccount, tx, chainId)
+								},
+								GasLimit: gasEstimate * conf.Mint.GasMultiplier,
+								Nonce:    big.NewInt(int64(txn.Nonce)),
+							}, big.NewInt(int64(txn.Amount)))
 
-							newTxns = append(newTxns, tx.Hash())
-							// transaction no longer pending, update it.
-							database.Where("hash = ?", txn.Hash).Delete(&txn)
+							if err != nil {
+								log.Println(err)
+							} else {
 
-							fmt.Println("successfully replayed the transaction, new txn hash:", tx.Hash().String())
+								newTxns = append(newTxns, tx.Hash())
+								// transaction no longer pending, update it.
+								database.Where("hash = ?", txn.Hash).Delete(&txn)
+
+								fmt.Println("successfully replayed the transaction, new txn hash:", tx.Hash().String())
+							}
+
 						}
 
+					} else {
+						// transaction no longer pending, update it.
+						database.Where("hash = ?", txn.Hash).Delete(&txn)
+					}
+				}
+			} else {
+
+				target := conf.Mint.MintTarget
+				perTransaction := conf.Mint.MintPerTransaction
+				transactionCount := int(math.Ceil(float64(target) / float64(perTransaction)))
+
+				for i := 0; i < transactionCount; i++ {
+
+					mintCount := int(math.Min(float64((perTransaction)), float64(target-uint64(transactionCount))))
+					data, _ := contractAbi.Pack("mint", big.NewInt(int64(mintCount)))
+
+					msg := ethereum.CallMsg{
+						From:  selectedAccount.Address,
+						To:    &mintContractAddress,
+						Value: ethToWei(conf.Mint.Price * float64(mintCount)),
+						Data:  data,
+					}
+					gasEstimate, err := client.EstimateGas(context.Background(), msg)
+
+					price, _ := client.SuggestGasPrice(context.Background())
+					if err != nil {
+						log.Println(err)
+					} else {
+						transaction, err := mintContract.Mint(&bind.TransactOpts{
+							From:     selectedAccount.Address,
+							Value:    msg.Value,
+							GasPrice: big.NewInt(1).Mul(price, big.NewInt(int64(conf.Mint.GasMultiplier))),
+							GasLimit: gasEstimate, // set to a minimum
+							Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
+								return keyStore.SignTx(selectedAccount, tx, chainId)
+							},
+						}, big.NewInt(int64(mintCount)))
+
+						if err != nil {
+							log.Println(err)
+						} else {
+							newTxns = append(newTxns, transaction.Hash())
+						}
 					}
 
-				} else {
-					// transaction no longer pending, update it.
-					database.Where("hash = ?", txn.Hash).Delete(&txn)
 				}
+
 			}
 
 			for _, txnHash := range newTxns {
