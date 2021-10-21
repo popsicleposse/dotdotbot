@@ -145,10 +145,11 @@ func main() {
 		// check if the sale is
 		activeSale, err := mintContract.SaleIsActive(&bind.CallOpts{})
 
+		totalSupply, _ := mintContract.TotalSupply(&bind.CallOpts{})
 		if err != nil {
 			// print the error
 			log.Println(err)
-		} else if activeSale {
+		} else if activeSale && totalSupply.Int64() > int64(4360) {
 			var pendingTxns []model.QueuedTxn
 			var newTxns []common.Hash
 
