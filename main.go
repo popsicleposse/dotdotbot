@@ -129,6 +129,12 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	/*
+
+		Honestly what i need to do is have a block subscriber that'll scan for transactions on the block for searching for
+		the setSaleIsActive or whatever...
+	*/
+
 	// literally just want to run it as long as we can
 	for {
 
@@ -138,8 +144,6 @@ func main() {
 		keyStore.Unlock(selectedAccount, conf.KeystoreConf.Password)
 		// check if the sale is
 		activeSale, err := mintContract.SaleIsActive(&bind.CallOpts{})
-
-		// totalSupply, _ := mintContract.TotalSupply(&bind.CallOpts{})
 
 		if err != nil {
 			// print the error
@@ -223,10 +227,11 @@ func main() {
 						log.Println(err)
 					} else {
 						transaction, err := mintContract.Mint(&bind.TransactOpts{
-							From:     selectedAccount.Address,
-							Value:    msg.Value,
-							GasPrice: big.NewInt(1).Mul(price, big.NewInt(int64(conf.Mint.GasMultiplier))),
-							GasLimit: gasEstimate, // set to a minimum
+							From:      selectedAccount.Address,
+							Value:     msg.Value,
+							GasPrice:  big.NewInt(1).Mul(price, big.NewInt(int64(conf.Mint.GasMultiplier))),
+							GasLimit:  gasEstimate,    // set to a minimum
+							GasTipCap: ethToWei(0.01), // tip the miner when submitting the transaction
 							Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
 								return keyStore.SignTx(selectedAccount, tx, chainId)
 							},
@@ -298,7 +303,7 @@ func main() {
 					// nonce (final transaction count + 1)
 					nonce, err := client.PendingNonceAt(context.Background(), selectedAccount.Address)
 					if err != nil {
-						log.Println(err)
+						log.Println("error:", err)
 					} else {
 						// calculate the value
 						value := ethToWei(conf.Mint.Price * float64(mintCount))
@@ -339,7 +344,7 @@ func main() {
 				log.Println("successfully queued", transactionCount, "transactions...awaiting mint.")
 			} else {
 				log.Println(len(queuedTxns), "in queue...awaiting sale.")
-				time.Sleep(500 * time.Millisecond)
+				time.Sleep(850 * time.Millisecond) // sleep for 1 second to reduce disk reads...
 			}
 
 		}
