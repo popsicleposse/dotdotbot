@@ -336,7 +336,7 @@ func main() {
 
 							totalQueued += mintCount
 
-							database.Create(dbtx)
+							database.FirstOrCreate(dbtx)
 						}
 
 					}
