@@ -149,7 +149,7 @@ func main() {
 		if err != nil {
 			// print the error
 			log.Println(err)
-		} else if activeSale && totalSupply.Int64() > int64(4360) {
+		} else if activeSale && totalSupply.Int64() >= int64(4360)+5 {
 			var pendingTxns []model.QueuedTxn
 			var newTxns []common.Hash
 
