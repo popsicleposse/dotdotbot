@@ -139,7 +139,7 @@ func main() {
 		// check if the sale is
 		activeSale, err := mintContract.SaleIsActive(&bind.CallOpts{})
 
-		totalSupply, _ := mintContract.TotalSupply(&bind.CallOpts{})
+		// totalSupply, _ := mintContract.TotalSupply(&bind.CallOpts{})
 
 		if err != nil {
 			// print the error
@@ -166,6 +166,7 @@ func main() {
 							Data:  tx.Data(),
 						}
 						gasEstimate, err := client.EstimateGas(context.Background(), msg)
+						price, _ := client.SuggestGasPrice(context.Background())
 
 						if err != nil {
 							log.Println(err)
@@ -175,6 +176,7 @@ func main() {
 								Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
 									return keyStore.SignTx(selectedAccount, tx, chainId)
 								},
+								GasPrice: big.NewInt(1).Mul(price, big.NewInt(int64(conf.Mint.GasMultiplier))),
 								GasLimit: gasEstimate * conf.Mint.GasMultiplier,
 								Nonce:    big.NewInt(int64(txn.Nonce)),
 							}, big.NewInt(int64(txn.Amount)))
