@@ -158,50 +158,43 @@ func main() {
 			if len(pendingTxns) > 0 {
 
 				for _, txn := range pendingTxns {
-					tx, pending, err := client.TransactionByHash(context.Background(), common.HexToHash(txn.Hash))
+
+					val, _ := new(big.Int).SetString(txn.Value, 10)
+					data := hexutil.MustDecode(txn.Data)
+
+					msg := ethereum.CallMsg{
+						From:  selectedAccount.Address,
+						To:    &mintContractAddress,
+						Value: val,
+						Data:  data,
+					}
+					gasEstimate, err := client.EstimateGas(context.Background(), msg)
+					price, _ := client.SuggestGasPrice(context.Background())
 
 					if err != nil {
 						log.Println(err)
-					} else if pending {
-
-						msg := ethereum.CallMsg{
-							From:  selectedAccount.Address,
-							To:    &mintContractAddress,
-							Value: tx.Value(),
-							Data:  tx.Data(),
-						}
-						gasEstimate, err := client.EstimateGas(context.Background(), msg)
-						price, _ := client.SuggestGasPrice(context.Background())
+					} else {
+						tx, err := mintContract.Mint(&bind.TransactOpts{
+							Value: val,
+							Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
+								return keyStore.SignTx(selectedAccount, tx, chainId)
+							},
+							GasPrice: big.NewInt(1).Mul(price, big.NewInt(int64(conf.Mint.GasMultiplier))),
+							GasLimit: gasEstimate * conf.Mint.GasMultiplier,
+							Nonce:    big.NewInt(int64(txn.Nonce)),
+						}, big.NewInt(int64(txn.Amount)))
 
 						if err != nil {
 							log.Println(err)
 						} else {
-							tx, err := mintContract.Mint(&bind.TransactOpts{
-								Value: tx.Value(),
-								Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
-									return keyStore.SignTx(selectedAccount, tx, chainId)
-								},
-								GasPrice: big.NewInt(1).Mul(price, big.NewInt(int64(conf.Mint.GasMultiplier))),
-								GasLimit: gasEstimate * conf.Mint.GasMultiplier,
-								Nonce:    big.NewInt(int64(txn.Nonce)),
-							}, big.NewInt(int64(txn.Amount)))
 
-							if err != nil {
-								log.Println(err)
-							} else {
+							newTxns = append(newTxns, tx.Hash())
+							// transaction no longer pending, update it.
+							database.Where("hash = ?", txn.Hash).Delete(&txn)
 
-								newTxns = append(newTxns, tx.Hash())
-								// transaction no longer pending, update it.
-								database.Where("hash = ?", txn.Hash).Delete(&txn)
-
-								fmt.Println("successfully replayed the transaction, new txn hash:", tx.Hash().String())
-							}
-
+							fmt.Println("successfully replayed the transaction, new txn hash:", tx.Hash().String())
 						}
 
-					} else {
-						// transaction no longer pending, update it.
-						database.Where("hash = ?", txn.Hash).Delete(&txn)
 					}
 				}
 			} else {
@@ -292,6 +285,14 @@ func main() {
 			var queuedTxns []model.QueuedTxn
 
 			database.Where(&model.QueuedTxn{}).Find(&queuedTxns)
+
+			// dropped := false
+			// for _, queuedTxn := range queuedTxns {
+			// 	txn, pending, err := client.TransactionByHash(context.Background(), common.HexToHash(queuedTxn.Hash))
+
+			// 	if err != nil {
+			// 	}
+			// }
 
 			if len(queuedTxns) < int(transactionCount) {
 				log.Println("queueing", transactionCount, "transactions")
