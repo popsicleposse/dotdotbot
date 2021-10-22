@@ -135,6 +135,27 @@ func main() {
 		the setSaleIsActive or whatever...
 	*/
 
+	incomingBlocks := make(chan *types.Header)
+	client.SubscribeNewHead(context.Background(), incomingBlocks)
+
+	go func(incomingBlocks chan *types.Header) {
+
+		for blockHeader := range incomingBlocks {
+			block, err := client.BlockByHash(context.Background(), blockHeader.Hash())
+
+			if err != nil {
+				log.Println(err)
+			} else {
+
+				for _, txn := range block.Body().Transactions {
+					fmt.Println(hexutil.Encode(txn.Data()))
+				}
+			}
+
+		}
+
+	}(incomingBlocks)
+
 	// literally just want to run it as long as we can
 	for {
 
