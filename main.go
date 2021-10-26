@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -107,11 +106,11 @@ func main() {
 		// retries         = 1
 	)
 
-	chainId, err := client.ChainID(context.Background())
+	// chainId, err := client.ChainID(context.Background())
 
-	if err != nil {
-		log.Fatalln(err)
-	}
+	// if err != nil {
+	// 	log.Fatalln(err)
+	// }
 
 	mintContract, err := shroomscouts.NewShroomscouts(mintContractAddress, client)
 
@@ -121,39 +120,42 @@ func main() {
 	}
 
 	selectedAccount := keyStore.Accounts()[0]
-	msg := ethereum.CallMsg{
-		From: selectedAccount.Address,
-		To:   &mintContractAddress,
-		Data: hexutil.MustDecode("0xc634d0320000000000000000000000000000000000000000000000000000000000000003"),
-	}
+	// msg := ethereum.CallMsg{
+	// 	From: selectedAccount.Address,
+	// 	To:   &mintContractAddress,
+	// 	Data: hexutil.MustDecode("0xc634d0320000000000000000000000000000000000000000000000000000000000000002"),
+	// }
 
 	fmt.Println(selectedAccount.Address.String())
 
-	nonce, err := client.PendingNonceAt(context.Background(), selectedAccount.Address)
+	fmt.Println(
+		mintContract.BalanceOf(&bind.CallOpts{}, common.HexToAddress("0xF42D1c0c0165AF5625b2ecD5027c5C5554e5b039"), big.NewInt(2)))
 
-	if err != nil {
-		log.Fatalln(err)
-	}
-	gasEstimate, err := client.EstimateGas(context.Background(), msg)
+	// nonce, err := client.PendingNonceAt(context.Background(), selectedAccount.Address)
 
-	fmt.Println(gasEstimate)
+	// if err != nil {
+	// 	log.Fatalln(err)
+	// }
+	// gasEstimate, err := client.EstimateGas(context.Background(), msg)
 
-	keyStore.Unlock(selectedAccount, conf.KeystoreConf.Password)
+	// fmt.Println(gasEstimate)
 
-	tx, err := mintContract.MintToken(&bind.TransactOpts{
-		Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
-			return keyStore.SignTx(selectedAccount, tx, chainId)
-		},
-		GasLimit: gasEstimate,
-		// NoSend:   true,
-		Nonce: big.NewInt(int64(nonce)),
-	}, big.NewInt(int64(3)))
+	// keyStore.Unlock(selectedAccount, conf.KeystoreConf.Password)
 
-	if err != nil {
-		fmt.Println(err)
-	} else {
-		fmt.Println(tx.Hash().String())
-	}
+	// tx, err := mintContract.MintToken(&bind.TransactOpts{
+	// 	Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
+	// 		return keyStore.SignTx(selectedAccount, tx, chainId)
+	// 	},
+	// 	GasLimit: gasEstimate,
+	// 	// NoSend:   true,
+	// 	Nonce: big.NewInt(int64(nonce)),
+	// }, big.NewInt(int64(2)))
+
+	// if err != nil {
+	// 	fmt.Println(err)
+	// } else {
+	// 	fmt.Println(tx.Hash().String())
+	// }
 
 	keyStore.Lock(selectedAccount.Address)
 	// // literally just want to run it as long as we can

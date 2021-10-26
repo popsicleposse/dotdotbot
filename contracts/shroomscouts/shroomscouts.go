@@ -30,7 +30,7 @@ var (
 
 // ShroomscoutsMetaData contains all meta data concerning the Shroomscouts contract.
 var ShroomscoutsMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"mintToken\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	ABI: "[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_owner\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"_id\",\"type\":\"uint256\"}],\"name\":\"balanceOf\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"mintToken\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
 }
 
 // ShroomscoutsABI is the input ABI used to generate the binding from.
@@ -177,6 +177,37 @@ func (_Shroomscouts *ShroomscoutsTransactorRaw) Transfer(opts *bind.TransactOpts
 // Transact invokes the (paid) contract method with params as input values.
 func (_Shroomscouts *ShroomscoutsTransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
 	return _Shroomscouts.Contract.contract.Transact(opts, method, params...)
+}
+
+// BalanceOf is a free data retrieval call binding the contract method 0x00fdd58e.
+//
+// Solidity: function balanceOf(address _owner, uint256 _id) view returns(uint256)
+func (_Shroomscouts *ShroomscoutsCaller) BalanceOf(opts *bind.CallOpts, _owner common.Address, _id *big.Int) (*big.Int, error) {
+	var out []interface{}
+	err := _Shroomscouts.contract.Call(opts, &out, "balanceOf", _owner, _id)
+
+	if err != nil {
+		return *new(*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+
+	return out0, err
+
+}
+
+// BalanceOf is a free data retrieval call binding the contract method 0x00fdd58e.
+//
+// Solidity: function balanceOf(address _owner, uint256 _id) view returns(uint256)
+func (_Shroomscouts *ShroomscoutsSession) BalanceOf(_owner common.Address, _id *big.Int) (*big.Int, error) {
+	return _Shroomscouts.Contract.BalanceOf(&_Shroomscouts.CallOpts, _owner, _id)
+}
+
+// BalanceOf is a free data retrieval call binding the contract method 0x00fdd58e.
+//
+// Solidity: function balanceOf(address _owner, uint256 _id) view returns(uint256)
+func (_Shroomscouts *ShroomscoutsCallerSession) BalanceOf(_owner common.Address, _id *big.Int) (*big.Int, error) {
+	return _Shroomscouts.Contract.BalanceOf(&_Shroomscouts.CallOpts, _owner, _id)
 }
 
 // MintToken is a paid mutator transaction binding the contract method 0xc634d032.
