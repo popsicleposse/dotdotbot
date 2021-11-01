@@ -146,10 +146,12 @@ func main() {
 		activeSale, err := mintContract.SaleIsActive(&bind.CallOpts{})
 
 		totalSupply, _ := mintContract.TotalSupply(&bind.CallOpts{})
+		maxSupply, _ := mintContract.MAXSUPPLY(nil)
 		if err != nil {
 			// print the error
 			log.Println(err)
-		} else if activeSale && totalSupply.Int64() >= int64(4360)+5 {
+
+		} else if activeSale && totalSupply.Int64() < maxSupply.Int64()-int64(conf.Mint.MintTarget) {
 			var pendingTxns []model.QueuedTxn
 			var newTxns []common.Hash
 
