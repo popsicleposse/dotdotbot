@@ -151,6 +151,10 @@ func main() {
 			// print the error
 			log.Println(err)
 
+			// max = 4460, totalSupply = 4360, we don't want to mint at 4460 because transaction will fail
+			// we need room for the amount we want to mint
+			// so max = 4454 = totalSupply = 4450 there would be enough room for 6 mints
+			// but with 4455 +  6 that would put us above the max supply of 4460 (4461).
 		} else if activeSale && totalSupply.Int64() < maxSupply.Int64()-int64(conf.Mint.MintTarget) {
 			var pendingTxns []model.QueuedTxn
 			var newTxns []common.Hash
