@@ -285,6 +285,8 @@ func main() {
 				log.Println("waiting for supply increase...")
 			}
 
+		} else {
+			log.Println("just waiting")
 		}
 
 		// else {
