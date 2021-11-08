@@ -155,130 +155,135 @@ func main() {
 			// we need room for the amount we want to mint
 			// so max = 4454 = totalSupply = 4450 there would be enough room for 6 mints
 			// but with 4455 +  6 that would put us above the max supply of 4460 (4461).
-		} else if activeSale && totalSupply.Int64() < maxSupply.Int64()-int64(conf.Mint.MintTarget) {
-			var pendingTxns []model.QueuedTxn
-			var newTxns []common.Hash
+		} else if activeSale {
+			if totalSupply.Int64() < maxSupply.Int64()-int64(conf.Mint.MintTarget) {
+				var pendingTxns []model.QueuedTxn
+				var newTxns []common.Hash
 
-			database.Where(&model.QueuedTxn{Pending: true}).Find(&pendingTxns)
+				database.Where(&model.QueuedTxn{Pending: true}).Find(&pendingTxns)
 
-			if len(pendingTxns) > 0 {
+				if len(pendingTxns) > 0 {
 
-				for _, txn := range pendingTxns {
+					for _, txn := range pendingTxns {
 
-					val, _ := new(big.Int).SetString(txn.Value, 10)
-					data := hexutil.MustDecode(txn.Data)
+						val, _ := new(big.Int).SetString(txn.Value, 10)
+						data := hexutil.MustDecode(txn.Data)
 
-					msg := ethereum.CallMsg{
-						From:  selectedAccount.Address,
-						To:    &mintContractAddress,
-						Value: val,
-						Data:  data,
-					}
-					gasEstimate, err := client.EstimateGas(context.Background(), msg)
-					price, _ := client.SuggestGasPrice(context.Background())
-
-					if err != nil {
-						log.Println(err)
-					} else {
-						tx, err := mintContract.Mint(&bind.TransactOpts{
+						msg := ethereum.CallMsg{
+							From:  selectedAccount.Address,
+							To:    &mintContractAddress,
 							Value: val,
-							Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
-								return keyStore.SignTx(selectedAccount, tx, chainId)
-							},
-							GasPrice: big.NewInt(1).Mul(price, big.NewInt(int64(conf.Mint.GasMultiplier))),
-							GasLimit: gasEstimate * conf.Mint.GasMultiplier,
-							Nonce:    big.NewInt(int64(txn.Nonce)),
-						}, big.NewInt(int64(txn.Amount)))
+							Data:  data,
+						}
+						gasEstimate, err := client.EstimateGas(context.Background(), msg)
+						price, _ := client.SuggestGasPrice(context.Background())
 
 						if err != nil {
 							log.Println(err)
 						} else {
+							tx, err := mintContract.Mint(&bind.TransactOpts{
+								Value: val,
+								Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
+									return keyStore.SignTx(selectedAccount, tx, chainId)
+								},
+								GasPrice: big.NewInt(1).Mul(price, big.NewInt(int64(conf.Mint.GasMultiplier))),
+								GasLimit: gasEstimate * conf.Mint.GasMultiplier,
+								Nonce:    big.NewInt(int64(txn.Nonce)),
+							}, big.NewInt(int64(txn.Amount)))
 
-							newTxns = append(newTxns, tx.Hash())
-							// transaction no longer pending, update it.
-							database.Where("hash = ?", txn.Hash).Delete(&txn)
+							if err != nil {
+								log.Println(err)
+							} else {
 
-							fmt.Println("successfully replayed the transaction, new txn hash:", tx.Hash().String())
+								newTxns = append(newTxns, tx.Hash())
+								// transaction no longer pending, update it.
+								database.Where("hash = ?", txn.Hash).Delete(&txn)
+
+								fmt.Println("successfully replayed the transaction, new txn hash:", tx.Hash().String())
+							}
+
+						}
+					}
+				} else {
+
+					target := conf.Mint.MintTarget
+					perTransaction := conf.Mint.MintPerTransaction
+					transactionCount := int(math.Ceil(float64(target) / float64(perTransaction)))
+
+					for i := 0; i < transactionCount; i++ {
+
+						mintCount := int(math.Min(float64((perTransaction)), float64(target-uint64(transactionCount))))
+						data, _ := contractAbi.Pack("mint", big.NewInt(int64(mintCount)))
+
+						msg := ethereum.CallMsg{
+							From:  selectedAccount.Address,
+							To:    &mintContractAddress,
+							Value: ethToWei(conf.Mint.Price * float64(mintCount)),
+							Data:  data,
+						}
+						gasEstimate, err := client.EstimateGas(context.Background(), msg)
+
+						price, _ := client.SuggestGasPrice(context.Background())
+						if err != nil {
+							log.Println(err)
+						} else {
+							transaction, err := mintContract.Mint(&bind.TransactOpts{
+								From:      selectedAccount.Address,
+								Value:     msg.Value,
+								GasPrice:  big.NewInt(1).Mul(price, big.NewInt(int64(conf.Mint.GasMultiplier))),
+								GasLimit:  gasEstimate,    // set to a minimum
+								GasTipCap: ethToWei(0.01), // tip the miner when submitting the transaction
+								Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
+									return keyStore.SignTx(selectedAccount, tx, chainId)
+								},
+							}, big.NewInt(int64(mintCount)))
+
+							if err != nil {
+								log.Println(err)
+							} else {
+								newTxns = append(newTxns, transaction.Hash())
+							}
 						}
 
 					}
+
 				}
+
+				for _, txnHash := range newTxns {
+					receipt, err := client.TransactionReceipt(context.Background(), txnHash)
+
+					for err != nil {
+						time.Sleep(500 * time.Millisecond)
+
+						log.Println("no receipt yet. retrying.")
+						receipt, err = client.TransactionReceipt(context.Background(), txnHash)
+					}
+
+					txn, pending, err := client.TransactionByHash(context.Background(), txnHash)
+
+					for err != nil || pending {
+						time.Sleep(500 * time.Millisecond)
+						log.Println("no log yet. retrying.")
+						txn, pending, err = client.TransactionByHash(context.Background(), txnHash)
+					}
+
+					database.Create(
+						&model.FinalTxn{
+							ProjectName: name,
+							Status:      uint(receipt.Status),
+							Hash:        txnHash.String()[2:],
+							Value:       txn.Value().String(),
+							Gas:         txn.Gas(),
+							GasPrice:    txn.GasPrice().String(),
+							Cost:        txn.Cost().String(),
+						})
+				}
+
+				break
 			} else {
-
-				target := conf.Mint.MintTarget
-				perTransaction := conf.Mint.MintPerTransaction
-				transactionCount := int(math.Ceil(float64(target) / float64(perTransaction)))
-
-				for i := 0; i < transactionCount; i++ {
-
-					mintCount := int(math.Min(float64((perTransaction)), float64(target-uint64(transactionCount))))
-					data, _ := contractAbi.Pack("mint", big.NewInt(int64(mintCount)))
-
-					msg := ethereum.CallMsg{
-						From:  selectedAccount.Address,
-						To:    &mintContractAddress,
-						Value: ethToWei(conf.Mint.Price * float64(mintCount)),
-						Data:  data,
-					}
-					gasEstimate, err := client.EstimateGas(context.Background(), msg)
-
-					price, _ := client.SuggestGasPrice(context.Background())
-					if err != nil {
-						log.Println(err)
-					} else {
-						transaction, err := mintContract.Mint(&bind.TransactOpts{
-							From:      selectedAccount.Address,
-							Value:     msg.Value,
-							GasPrice:  big.NewInt(1).Mul(price, big.NewInt(int64(conf.Mint.GasMultiplier))),
-							GasLimit:  gasEstimate,    // set to a minimum
-							GasTipCap: ethToWei(0.01), // tip the miner when submitting the transaction
-							Signer: func(a common.Address, tx *types.Transaction) (*types.Transaction, error) {
-								return keyStore.SignTx(selectedAccount, tx, chainId)
-							},
-						}, big.NewInt(int64(mintCount)))
-
-						if err != nil {
-							log.Println(err)
-						} else {
-							newTxns = append(newTxns, transaction.Hash())
-						}
-					}
-
-				}
-
+				time.Sleep(850 * time.Millisecond)
+				log.Println("waiting for supply increase...")
 			}
-
-			for _, txnHash := range newTxns {
-				receipt, err := client.TransactionReceipt(context.Background(), txnHash)
-
-				for err != nil {
-					time.Sleep(500 * time.Millisecond)
-
-					log.Println("no receipt yet. retrying.")
-					receipt, err = client.TransactionReceipt(context.Background(), txnHash)
-				}
-
-				txn, pending, err := client.TransactionByHash(context.Background(), txnHash)
-
-				for err != nil || pending {
-					time.Sleep(500 * time.Millisecond)
-					log.Println("no log yet. retrying.")
-					txn, pending, err = client.TransactionByHash(context.Background(), txnHash)
-				}
-
-				database.Create(
-					&model.FinalTxn{
-						ProjectName: name,
-						Status:      uint(receipt.Status),
-						Hash:        txnHash.String()[2:],
-						Value:       txn.Value().String(),
-						Gas:         txn.Gas(),
-						GasPrice:    txn.GasPrice().String(),
-						Cost:        txn.Cost().String(),
-					})
-			}
-
-			break
 
 		} else {
 			// if the sale is not active we want to place a transaction that will remain in pending util we update it.
